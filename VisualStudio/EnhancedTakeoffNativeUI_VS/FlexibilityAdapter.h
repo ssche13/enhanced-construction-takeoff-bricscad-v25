@@ -2,7 +2,6 @@
 #pragma once
 
 #include "FlexibleColorAssignment.h"
-#include "ColorMaterialMapper.h"  // Legacy system
 
 namespace EnhancedTakeoff {
 
@@ -13,10 +12,7 @@ namespace EnhancedTakeoff {
 class FlexibilityAdapter {
 public:
     // Convert old fixed assignments to new flexible system
-    static void MigrateExistingAssignments(
-        FlexibleColorAssignment* newSystem,
-        const ColorMaterialMapper* oldSystem  // DEPRECATED
-    );
+    static void MigrateExistingAssignments(FlexibleColorAssignment* newSystem);
     
     // Provide fallback for existing code
     static std::vector<int> GetLegacyColorAssignments();
@@ -26,6 +22,9 @@ public:
     
     // Temporary compatibility methods
     static void InitializeLegacyCompatibility(FlexibleColorAssignment* flexSystem);
+    
+    // Helper to initialize common material types
+    static void InitializeCommonMaterials(FlexibleColorAssignment* flexSystem);
 };
 
 } // namespace EnhancedTakeoff

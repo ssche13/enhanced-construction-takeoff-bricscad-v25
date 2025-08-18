@@ -1,0 +1,5 @@
+Material Type,Area,Thickness,Volume,Unit Cost,Total Cost,Description,Location
+Concrete,120.00,0.33,39.60,150.00,5940.00,"Foundation slab","Foundation"
+2x4 Lumber,450.00,0.00,0.00,2.85,0.00,"Wall framing","Walls"
+2x6 Lumber,280.00,0.00,0.00,4.25,0.00,"Exterior walls","Walls"
+Roofing Shingles,2400.00,0.00,0.00,0.95,0.00,"Asphalt shingles","Roof"
