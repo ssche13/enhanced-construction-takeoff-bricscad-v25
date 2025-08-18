@@ -5,18 +5,6 @@
 #include "pch.h"
 #include "AttachmentManager.h"
 
-#ifdef HAS_BRX_SDK
-#include "dbapserv.h"
-#include "dbents.h"
-#include "dbsymtb.h"
-#include "acedads.h"
-#include "aced.h"
-#include "dbxrecrd.h"
-#include "dbfiler.h"
-#include "dblayout.h"
-#include "acutads.h"
-#endif
-
 #include <fstream>
 #include <algorithm>
 
@@ -92,12 +80,14 @@ bool AttachmentManager::InitializeDocument() {
         return false;
     }
 #else
-    return false;
+    // Placeholder implementation without BRX SDK
+    NotifyChange("Document initialization (BRX SDK not available)");
+    return true;
 #endif
 }
 
-bool AttachmentManager::CreateStandardLayers(AcDbDatabase* pDb, AcDbTransaction* pTr) {
 #ifdef HAS_BRX_SDK
+bool AttachmentManager::CreateStandardLayers(AcDbDatabase* pDb, AcDbTransaction* pTr) {
     AcDbLayerTable* pLayerTable;
     if (pDb->getLayerTable(pLayerTable, AcDb::kForWrite) != Acad::eOk)
         return false;
@@ -153,13 +143,9 @@ bool AttachmentManager::CreateStandardLayers(AcDbDatabase* pDb, AcDbTransaction*
     
     pLayerTable->close();
     return true;
-#else
-    return false;
-#endif
 }
 
 bool AttachmentManager::CreateMaterialBoundaryLayers(AcDbDatabase* pDb, AcDbTransaction* pTr) {
-#ifdef HAS_BRX_SDK
     AcDbLayerTable* pLayerTable;
     if (pDb->getLayerTable(pLayerTable, AcDb::kForWrite) != Acad::eOk)
         return false;
@@ -184,14 +170,10 @@ bool AttachmentManager::CreateMaterialBoundaryLayers(AcDbDatabase* pDb, AcDbTran
     
     pLayerTable->close();
     return true;
-#else
-    return false;
-#endif
 }
 
 bool AttachmentManager::CreateLayerIfNotExists(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr, 
                                               const std::string& name, int colorIndex) {
-#ifdef HAS_BRX_SDK
     if (!pLayerTable->has(name.c_str())) {
         AcDbLayerTableRecord* pLayer = new AcDbLayerTableRecord();
         pLayer->setName(name.c_str());
@@ -205,12 +187,10 @@ bool AttachmentManager::CreateLayerIfNotExists(AcDbLayerTable* pLayerTable, AcDb
         pTr->addNewlyCreatedDBObject(pLayer, true);
         return true;
     }
-#endif
     return false;
 }
 
 bool AttachmentManager::SetupLayerStates(AcDbDatabase* pDb, AcDbTransaction* pTr) {
-#ifdef HAS_BRX_SDK
     // Create predefined layer states for different views
     std::vector<std::string> layerStates = {
         "All_Visible",
@@ -229,24 +209,28 @@ bool AttachmentManager::SetupLayerStates(AcDbDatabase* pDb, AcDbTransaction* pTr
     }
     
     return true;
-#else
-    return false;
-#endif
 }
 
 bool AttachmentManager::SetupDefaultViews(AcDbDatabase* pDb, AcDbTransaction* pTr) {
-#ifdef HAS_BRX_SDK
     AcDbViewTable* pViewTable;
     if (pDb->getViewTable(pViewTable, AcDb::kForWrite) != Acad::eOk)
         return false;
     
     // Create standard views for construction takeoff
     std::vector<ViewDefinition> views = {
+#ifdef HAS_BRX_SDK
         {"Plan_View", 1000.0, AcGePoint2d(500, 500)},
         {"Foundation_View", 1000.0, AcGePoint2d(500, 500)},
         {"Framing_View", 1000.0, AcGePoint2d(500, 500)},
         {"Roof_View", 1000.0, AcGePoint2d(500, 500)},
         {"MEP_View", 1000.0, AcGePoint2d(500, 500)}
+#else
+        {"Plan_View", 1000.0, 500, 500},
+        {"Foundation_View", 1000.0, 500, 500},
+        {"Framing_View", 1000.0, 500, 500},
+        {"Roof_View", 1000.0, 500, 500},
+        {"MEP_View", 1000.0, 500, 500}
+#endif
     };
     
     for (const auto& viewDef : views) {
@@ -254,7 +238,11 @@ bool AttachmentManager::SetupDefaultViews(AcDbDatabase* pDb, AcDbTransaction* pT
             AcDbViewTableRecord* pView = new AcDbViewTableRecord();
             pView->setName(viewDef.name.c_str());
             pView->setHeight(viewDef.height);
+#ifdef HAS_BRX_SDK
             pView->setCenterPoint(viewDef.center);
+#else
+            // Placeholder for when BRX SDK is not available
+#endif
             
             AcDbObjectId viewId;
             pViewTable->add(viewId, pView);
@@ -264,14 +252,10 @@ bool AttachmentManager::SetupDefaultViews(AcDbDatabase* pDb, AcDbTransaction* pT
     
     pViewTable->close();
     return true;
-#else
-    return false;
-#endif
 }
 
 bool AttachmentManager::AttachPlan(const std::string& planPath, const std::string& planName,
                                   const AcGePoint3d& insertPoint, double scale, double rotation) {
-#ifdef HAS_BRX_SDK
     AcDbDatabase* pDb = acdbHostApplicationServices()->workingDatabase();
     if (!pDb) return false;
     
@@ -332,10 +316,104 @@ bool AttachmentManager::AttachPlan(const std::string& planPath, const std::strin
         NotifyChange("Error attaching plan: " + planName);
         return false;
     }
-#else
-    return false;
-#endif
 }
+
+bool AttachmentManager::SetLayerVisibility(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr, 
+                                          const std::string& layerName, bool visible) {
+    if (pLayerTable->has(layerName.c_str())) {
+        AcDbLayerTableRecord* pLayer;
+        if (pLayerTable->getAt(layerName.c_str(), pLayer, AcDb::kForWrite) == Acad::eOk) {
+            pLayer->setIsOff(!visible);
+            pLayer->close();
+            return true;
+        }
+    }
+    return false;
+}
+
+AcDbObjectId AttachmentManager::CreateBoundaryBox(const std::vector<AcGePoint3d>& points, 
+                                                 const std::string& boundaryType, int colorIndex) {
+    AcDbDatabase* pDb = acdbHostApplicationServices()->workingDatabase();
+    if (!pDb) return AcDbObjectId::kNull;
+    
+    AcDbTransactionManager* pTrans = pDb->transactionManager();
+    AcDbTransaction* pTr = pTrans->startTransaction();
+    
+    if (!pTr) return AcDbObjectId::kNull;
+    
+    try {
+        // Create polyline boundary
+        AcDbPolyline* pPoly = new AcDbPolyline();
+        
+        for (size_t i = 0; i < points.size(); ++i) {
+            AcGePoint2d pt2d(points[i].x, points[i].y);
+            pPoly->addVertexAt(i, pt2d, 0, 0, 0);
+        }
+        pPoly->setClosed(Adesk::kTrue);
+        
+        // Set properties
+        pPoly->setLayer(("BOUNDARY_" + boundaryType).c_str());
+        
+        AcCmColor color;
+        color.setColorIndex(colorIndex);
+        pPoly->setColor(color);
+        
+        // Add to model space
+        AcDbBlockTable* pBlockTable;
+        pDb->getBlockTable(pBlockTable, AcDb::kForRead);
+        
+        AcDbBlockTableRecord* pModelSpace;
+        pBlockTable->getAt(ACDB_MODEL_SPACE, pModelSpace, AcDb::kForWrite);
+        
+        AcDbObjectId polyId;
+        pModelSpace->appendAcDbEntity(polyId, pPoly);
+        pTr->addNewlyCreatedDBObject(pPoly, true);
+        
+        // Add XData for boundary tracking
+        AddBoundaryXData(pPoly, boundaryType, pTr);
+        
+        pModelSpace->close();
+        pBlockTable->close();
+        
+        pTrans->endTransaction();
+        NotifyChange("Boundary box created for '" + boundaryType + "'");
+        return polyId;
+    }
+    catch (...) {
+        pTrans->abortTransaction();
+        return AcDbObjectId::kNull;
+    }
+}
+
+void AttachmentManager::AddBoundaryXData(AcDbEntity* pEntity, const std::string& boundaryType, 
+                                        AcDbTransaction* pTr) {
+    // Register application if not exists
+    AcDbRegAppTable* pRegAppTable;
+    pEntity->database()->getRegAppTable(pRegAppTable, AcDb::kForWrite);
+    
+    const char* appName = "ENHANCED_TAKEOFF_BOUNDARY";
+    if (!pRegAppTable->has(appName)) {
+        AcDbRegAppTableRecord* pRegApp = new AcDbRegAppTableRecord();
+        pRegApp->setName(appName);
+        
+        AcDbObjectId regAppId;
+        pRegAppTable->add(regAppId, pRegApp);
+        pTr->addNewlyCreatedDBObject(pRegApp, true);
+    }
+    pRegAppTable->close();
+    
+    // Create XData
+    struct resbuf* pXData = acutBuildList(
+        AcDb::kDxfRegAppName, appName,
+        AcDb::kDxfXdAsciiString, boundaryType.c_str(),
+        AcDb::kDxfXdReal, (double)time(nullptr),
+        NULL);
+    
+    pEntity->setXData(pXData);
+    acutRelRb(pXData);
+}
+
+#endif // HAS_BRX_SDK
 
 bool AttachmentManager::TogglePlan(const std::string& planName) {
     auto it = m_planConfigurations.find(planName);
@@ -381,7 +459,10 @@ bool AttachmentManager::TogglePlan(const std::string& planName) {
         return false;
     }
 #else
-    return false;
+    // Placeholder implementation without BRX SDK
+    it->second.isLoaded = !it->second.isLoaded;
+    NotifyChange("Plan '" + planName + "' " + (it->second.isLoaded ? "loaded" : "unloaded") + " (simulated)");
+    return true;
 #endif
 }
 
@@ -455,109 +536,9 @@ void AttachmentManager::ApplyElevationLayers(const std::string& elevationType) {
     catch (...) {
         pTrans->abortTransaction();
     }
-#endif
-}
-
-bool AttachmentManager::SetLayerVisibility(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr, 
-                                          const std::string& layerName, bool visible) {
-#ifdef HAS_BRX_SDK
-    if (pLayerTable->has(layerName.c_str())) {
-        AcDbLayerTableRecord* pLayer;
-        if (pLayerTable->getAt(layerName.c_str(), pLayer, AcDb::kForWrite) == Acad::eOk) {
-            pLayer->setIsOff(!visible);
-            pLayer->close();
-            return true;
-        }
-    }
-#endif
-    return false;
-}
-
-AcDbObjectId AttachmentManager::CreateBoundaryBox(const std::vector<AcGePoint3d>& points, 
-                                                 const std::string& boundaryType, int colorIndex) {
-#ifdef HAS_BRX_SDK
-    AcDbDatabase* pDb = acdbHostApplicationServices()->workingDatabase();
-    if (!pDb) return AcDbObjectId::kNull;
-    
-    AcDbTransactionManager* pTrans = pDb->transactionManager();
-    AcDbTransaction* pTr = pTrans->startTransaction();
-    
-    if (!pTr) return AcDbObjectId::kNull;
-    
-    try {
-        // Create polyline boundary
-        AcDbPolyline* pPoly = new AcDbPolyline();
-        
-        for (size_t i = 0; i < points.size(); ++i) {
-            AcGePoint2d pt2d(points[i].x, points[i].y);
-            pPoly->addVertexAt(i, pt2d, 0, 0, 0);
-        }
-        pPoly->setClosed(Adesk::kTrue);
-        
-        // Set properties
-        pPoly->setLayer(("BOUNDARY_" + boundaryType).c_str());
-        
-        AcCmColor color;
-        color.setColorIndex(colorIndex);
-        pPoly->setColor(color);
-        
-        // Add to model space
-        AcDbBlockTable* pBlockTable;
-        pDb->getBlockTable(pBlockTable, AcDb::kForRead);
-        
-        AcDbBlockTableRecord* pModelSpace;
-        pBlockTable->getAt(ACDB_MODEL_SPACE, pModelSpace, AcDb::kForWrite);
-        
-        AcDbObjectId polyId;
-        pModelSpace->appendAcDbEntity(polyId, pPoly);
-        pTr->addNewlyCreatedDBObject(pPoly, true);
-        
-        // Add XData for boundary tracking
-        AddBoundaryXData(pPoly, boundaryType, pTr);
-        
-        pModelSpace->close();
-        pBlockTable->close();
-        
-        pTrans->endTransaction();
-        NotifyChange("Boundary box created for '" + boundaryType + "'");
-        return polyId;
-    }
-    catch (...) {
-        pTrans->abortTransaction();
-        return AcDbObjectId::kNull;
-    }
 #else
-    return AcDbObjectId::kNull;
-#endif
-}
-
-void AttachmentManager::AddBoundaryXData(AcDbEntity* pEntity, const std::string& boundaryType, 
-                                        AcDbTransaction* pTr) {
-#ifdef HAS_BRX_SDK
-    // Register application if not exists
-    AcDbRegAppTable* pRegAppTable;
-    pEntity->database()->getRegAppTable(pRegAppTable, AcDb::kForWrite);
-    
-    const char* appName = "ENHANCED_TAKEOFF_BOUNDARY";
-    if (!pRegAppTable->has(appName)) {
-        AcDbRegAppTableRecord* pRegApp = new AcDbRegAppTableRecord();
-        pRegApp->setName(appName);
-        
-        AcDbObjectId regAppId;
-        pRegAppTable->add(regAppId, pRegApp);
-        pTr->addNewlyCreatedDBObject(pRegApp, true);
-    }
-    pRegAppTable->close();
-    
-    // Create XData
-    struct resbuf* pXData = acutBuildList(
-        AcDb::kDxfRegAppName, appName,
-        AcDb::kDxfXdAsciiString, boundaryType.c_str(),
-        AcDb::kDxfXdReal, (double)time(nullptr),
-        NULL);
-    
-    pEntity->setXData(pXData);
-    acutRelRb(pXData);
+    // Placeholder implementation without BRX SDK
+    NotifyChange("Applied elevation layers for: " + elevationType + " (simulated)");
 #endif
 }
 

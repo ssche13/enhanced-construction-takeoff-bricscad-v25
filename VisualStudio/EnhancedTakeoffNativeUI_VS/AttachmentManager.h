@@ -41,9 +41,17 @@ public:
 #ifdef HAS_BRX_SDK
         AcDbObjectId xrefId;
         AcGePoint3d insertPoint;
+#else
+        // Placeholder types when BRX SDK is not available
+        int xrefId;
+        double insertX, insertY, insertZ;
 #endif
         
-        PlanConfiguration() : isLoaded(false), scale(1.0), rotation(0.0) {}
+        PlanConfiguration() : isLoaded(false), scale(1.0), rotation(0.0), xrefId(0) {
+#ifndef HAS_BRX_SDK
+            insertX = insertY = insertZ = 0.0;
+#endif
+        }
     };
     
     // Layer definition structure
@@ -73,14 +81,15 @@ public:
         double height;
 #ifdef HAS_BRX_SDK
         AcGePoint2d center;
-#endif
         
         ViewDefinition(const std::string& n, double h, const AcGePoint2d& c)
-            : name(n), height(h)
-#ifdef HAS_BRX_SDK
-            , center(c)
+            : name(n), height(h), center(c) {}
+#else
+        double centerX, centerY;
+        
+        ViewDefinition(const std::string& n, double h, double cx, double cy)
+            : name(n), height(h), centerX(cx), centerY(cy) {}
 #endif
-        {}
     };
     
     // Layer state manager
@@ -103,11 +112,15 @@ public:
     bool InitializeDocument();
     
     // Plan attachment management
-    bool AttachPlan(const std::string& planPath, const std::string& planName,
 #ifdef HAS_BRX_SDK
+    bool AttachPlan(const std::string& planPath, const std::string& planName,
                    const AcGePoint3d& insertPoint = AcGePoint3d::kOrigin,
-#endif
                    double scale = 1.0, double rotation = 0.0);
+#else
+    bool AttachPlan(const std::string& planPath, const std::string& planName,
+                   double insertX = 0.0, double insertY = 0.0, double insertZ = 0.0,
+                   double scale = 1.0, double rotation = 0.0);
+#endif
     bool DetachPlan(const std::string& planName);
     bool TogglePlan(const std::string& planName);
     
@@ -120,6 +133,9 @@ public:
 #ifdef HAS_BRX_SDK
     AcDbObjectId CreateBoundaryBox(const std::vector<AcGePoint3d>& points, 
                                   const std::string& boundaryType, int colorIndex);
+#else
+    int CreateBoundaryBox(const std::vector<std::vector<double>>& points, 
+                         const std::string& boundaryType, int colorIndex);
 #endif
     void SetBoundaryFilter(const std::string& boundaryName, const std::vector<int>& colorIndices);
     std::vector<int> GetBoundaryFilter(const std::string& boundaryName) const;
@@ -149,7 +165,7 @@ private:
     std::vector<ChangeCallback> m_callbacks;
     std::string m_templatePath;
     
-    // Layer and document setup
+    // Layer and document setup (BRX SDK only)
 #ifdef HAS_BRX_SDK
     bool CreateStandardLayers(AcDbDatabase* pDb, AcDbTransaction* pTr);
     bool CreateMaterialBoundaryLayers(AcDbDatabase* pDb, AcDbTransaction* pTr);
@@ -157,21 +173,15 @@ private:
                                const std::string& name, int colorIndex);
     bool SetupLayerStates(AcDbDatabase* pDb, AcDbTransaction* pTr);
     bool SetupDefaultViews(AcDbDatabase* pDb, AcDbTransaction* pTr);
+    bool SetLayerVisibility(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr,
+                           const std::string& layerName, bool visible);
+    void AddBoundaryXData(AcDbEntity* pEntity, const std::string& boundaryType, 
+                         AcDbTransaction* pTr);
 #endif
     
     // Elevation management
     void InitializeElevationTypes();
     void ApplyElevationLayers(const std::string& elevationType);
-#ifdef HAS_BRX_SDK
-    bool SetLayerVisibility(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr,
-                           const std::string& layerName, bool visible);
-#endif
-    
-    // Boundary support
-#ifdef HAS_BRX_SDK
-    void AddBoundaryXData(AcDbEntity* pEntity, const std::string& boundaryType, 
-                         AcDbTransaction* pTr);
-#endif
     
     // Configuration management
     bool LoadTemplateConfiguration(const std::string& configPath);

@@ -1,16 +1,16 @@
 // FlexibilityAdapter.cpp - Implementation for compatibility layer
+#include "pch.h"
 #include "FlexibilityAdapter.h"
 
 namespace EnhancedTakeoff {
 
 void FlexibilityAdapter::MigrateExistingAssignments(
-    FlexibleColorAssignment* newSystem) {
+    FlexibleColorAssignment* newSystem,
+    const void* oldSystem) {  // Changed to void* since ColorMaterialMapper is deprecated
     
     if (!newSystem) return;
     
-    // Migrate from old fixed color families to flexible assignments
-    // This provides a starting point for users to customize
-    
+    // Initialize with some default assignments for migration
     InitializeCommonMaterials(newSystem);
 }
 
@@ -36,56 +36,49 @@ bool FlexibilityAdapter::ConvertLegacyMapping(int oldColorFamily, int newColorIn
 void FlexibilityAdapter::InitializeLegacyCompatibility(FlexibleColorAssignment* flexSystem) {
     if (!flexSystem) return;
     
-    // Initialize with some default assignments for backward compatibility
-    // Users can override these with their own assignments
-    
-    FlexibleColorAssignment::ColorAssignment redWall;
-    redWall.colorIndex = 1;
-    redWall.materialName = "Interior Wall (User Defined)";
-    redWall.materialType = FlexibleColorAssignment::MaterialType::WALL;
-    redWall.unitCost = 0.0;  // User will set
-    redWall.description = "Migrated from legacy system - customize as needed";
-    redWall.isUserDefined = true;
-    
-    flexSystem->AssignColor(1, redWall);
-    
-    // Note: Users should define their own color assignments
-    // This is just for migration compatibility
+    InitializeCommonMaterials(flexSystem);
 }
 
 void FlexibilityAdapter::InitializeCommonMaterials(FlexibleColorAssignment* flexSystem) {
     if (!flexSystem) return;
     
-    // Initialize common material templates that users can customize
+    // Define common material templates for migration
     struct MaterialTemplate {
-        int colorIndex;
         std::string name;
-        FlexibleColorAssignment::MaterialType type;
+        double defaultCost;
         std::string description;
     };
     
-    std::vector<MaterialTemplate> templates = {
-        {1, "Interior Wall", FlexibleColorAssignment::MaterialType::WALL, "Standard interior wall construction"},
-        {2, "Exterior Wall", FlexibleColorAssignment::MaterialType::WALL, "Exterior wall with insulation"},
-        {3, "Structural Beam", FlexibleColorAssignment::MaterialType::STRUCTURAL, "Steel or wood beam"},
-        {4, "Floor Joist", FlexibleColorAssignment::MaterialType::FRAMING, "Floor framing member"},
-        {5, "Roof Material", FlexibleColorAssignment::MaterialType::ROOFING, "Roofing system"},
-        {6, "Foundation", FlexibleColorAssignment::MaterialType::CONCRETE, "Concrete foundation"},
-        {7, "MEP System", FlexibleColorAssignment::MaterialType::MEP, "Mechanical/Electrical/Plumbing"},
-        {8, "Custom Material", FlexibleColorAssignment::MaterialType::CUSTOM, "User-defined material"}
+    std::vector<MaterialTemplate> materials = {
+        {"Interior Wall", 2.50, "Interior wall framing and drywall"},
+        {"Exterior Wall", 4.75, "Exterior wall with siding"},
+        {"Roofing", 8.50, "Roofing materials and labor"},
+        {"Foundation", 6.25, "Foundation concrete and rebar"},
+        {"Flooring", 5.00, "Flooring materials and installation"},
+        {"Electrical", 3.50, "Electrical rough and finish"},
+        {"Plumbing", 4.25, "Plumbing rough and finish"},
+        {"HVAC", 7.00, "HVAC ductwork and equipment"},
+        {"Insulation", 1.85, "Wall and ceiling insulation"},
+        {"Windows", 12.50, "Window units and installation"},
+        {"Doors", 8.75, "Door units and hardware"},
+        {"Trim", 3.25, "Interior and exterior trim"},
+        {"Cabinets", 15.00, "Kitchen and bathroom cabinets"},
+        {"Appliances", 25.00, "Built-in appliances"},
+        {"User Defined 1", 0.00, "Custom material 1"},
+        {"User Defined 2", 0.00, "Custom material 2"}
     };
     
-    for (const auto& template_ : templates) {
+    // Create default assignments - users can override these
+    for (size_t i = 0; i < materials.size() && i < 16; ++i) {
         FlexibleColorAssignment::ColorAssignment assignment;
-        assignment.colorIndex = template_.colorIndex;
-        assignment.materialName = template_.name;
-        assignment.materialType = template_.type;
-        assignment.description = template_.description;
-        assignment.unitCost = 0.0; // User will set
-        assignment.isUserDefined = true;
-        assignment.isActive = false; // User must activate
+        assignment.colorIndex = static_cast<int>(i + 1);
+        assignment.materialName = materials[i].name;
+        assignment.unitCost = materials[i].defaultCost;
+        assignment.description = materials[i].description;
+        assignment.measurementTypes.push_back(FlexibleColorAssignment::MeasurementType::LF);
+        assignment.isActive = true;
         
-        flexSystem->AssignColor(template_.colorIndex, assignment);
+        flexSystem->AssignColor(assignment.colorIndex, assignment);
     }
 }
 
