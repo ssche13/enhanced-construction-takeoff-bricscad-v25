@@ -1,107 +1,184 @@
-// AttachmentManager.h - Manages Plan A/B/C/D attachments with version control
+// AttachmentManager.h - Enhanced Plan Management for BricsCAD V25
 #pragma once
 
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
+#include <functional>
 
-#ifndef BUILDING_TESTS
-#if HAS_BRX_SDK
+#ifdef HAS_BRX_SDK
 #include "acdb.h"
 #include "dbents.h"
-#include "dbxrefgraph.h"
-#endif
+#include "dbsymtb.h"
+#include "dbxrecrd.h"
+#include "dbapserv.h"
+#include "gedll.h"
+#include "gepnt3d.h"
+#include "gepnt2d.h"
+#include "gescl3d.h"
 #endif
 
 namespace EnhancedTakeoff {
 
 /**
- * Manages construction plan attachments (Plan A/B/C/D) with version control
- * COPILOT-HINT: This replaces fixed attachment systems with flexible management
+ * Enhanced Attachment Manager for BricsCAD V25 
+ * Manages construction plan attachments with AGS elevation system
+ * COPILOT-HINT: Complete BricsCAD-specific implementation with proper transaction handling
  */
 class AttachmentManager {
 public:
-    // Version structure for AGS system (A=stucco, G=hardi, S=brick)
-    struct PlanVersion {
-        std::string versionCode;        // "AGS", "AHS", etc.
-        std::string description;        // "Stucco/Hardi/Brick"
-        std::map<char, std::string> components;  // 'A'->Stucco, 'G'->Hardi, 'S'->Brick
-        std::vector<int> activeColors;  // Colors active in this version
-        bool isActive;
+    // Plan configuration structure
+    struct PlanConfiguration {
+        std::string name;
+        std::string path;
+        std::string elevationType;      // AGS system code
+        bool isLoaded;
+        double scale;
+        double rotation;
+        std::map<std::string, std::string> customProperties;
         
-        PlanVersion() : isActive(false) {}
+#ifdef HAS_BRX_SDK
+        AcDbObjectId xrefId;
+        AcGePoint3d insertPoint;
+#endif
+        
+        PlanConfiguration() : isLoaded(false), scale(1.0), rotation(0.0) {}
     };
     
-    // Attachment structure for plans
-    struct Attachment {
-        std::string planName;           // "Plan A", "Plan B", etc.
-        std::string filePath;           // DWG file path
-        std::vector<PlanVersion> versions;  // Available versions
-        std::string activeVersion;      // Currently active version code
-        bool isLoaded;
-        bool isVisible;
-        std::string areaPreset;        // "Southeast", "Northeast", etc.
+    // Layer definition structure
+    struct LayerDefinition {
+        std::string name;
+        int colorIndex;
+        std::string description;
         
-#ifndef BUILDING_TESTS
-#if HAS_BRX_SDK
-        AcDbObjectId xrefId;           // BricsCAD XRef ID
-#endif
-#endif
-        
-        Attachment() : isLoaded(false), isVisible(false) {}
+        LayerDefinition(const std::string& n, int c, const std::string& d)
+            : name(n), colorIndex(c), description(d) {}
     };
+    
+    // Material definition for boundary layers
+    struct MaterialDefinition {
+        std::string name;
+        int boundaryColor;
+        int fillColor; 
+        int backgroundColor;
+        
+        MaterialDefinition(const std::string& n, int b, int f, int bg)
+            : name(n), boundaryColor(b), fillColor(f), backgroundColor(bg) {}
+    };
+    
+    // View definition structure
+    struct ViewDefinition {
+        std::string name;
+        double height;
+#ifdef HAS_BRX_SDK
+        AcGePoint2d center;
+#endif
+        
+        ViewDefinition(const std::string& n, double h, const AcGePoint2d& c)
+            : name(n), height(h)
+#ifdef HAS_BRX_SDK
+            , center(c)
+#endif
+        {}
+    };
+    
+    // Layer state manager
+    struct LayerStateManager {
+        std::string name;
+        bool isActive;
+        std::vector<std::string> visibleLayers;
+        std::vector<std::string> hiddenLayers;
+        
+        LayerStateManager() : isActive(false) {}
+    };
+    
+    // Callback type for change notifications
+    using ChangeCallback = std::function<void(const std::string&)>;
 
     AttachmentManager();
     ~AttachmentManager();
     
-    // Attachment management
-    bool LoadAttachment(const std::string& planName, const std::string& dwgPath);
-    bool UnloadAttachment(const std::string& planName);
-    bool ToggleAttachment(const std::string& planName, bool visible);
+    // Document initialization
+    bool InitializeDocument();
     
-    // Version management
-    bool AddVersion(const std::string& planName, const PlanVersion& version);
-    bool SetActiveVersion(const std::string& planName, const std::string& versionCode);
-    PlanVersion* GetActiveVersion(const std::string& planName);
-    std::vector<std::string> GetVersionCodes(const std::string& planName);
+    // Plan attachment management
+    bool AttachPlan(const std::string& planPath, const std::string& planName,
+#ifdef HAS_BRX_SDK
+                   const AcGePoint3d& insertPoint = AcGePoint3d::kOrigin,
+#endif
+                   double scale = 1.0, double rotation = 0.0);
+    bool DetachPlan(const std::string& planName);
+    bool TogglePlan(const std::string& planName);
     
-    // Area preset management
-    void SetAreaPreset(const std::string& planName, const std::string& preset);
-    std::string GetAreaPreset(const std::string& planName) const;
-    std::map<std::string, double> GetAreaFactors(const std::string& preset) const;
+    // Elevation system (AGS: A-frame/Hip, Garage/No, Stucco/Hardi/Brick)
+    bool ApplyElevationVariation(const std::string& planName, const std::string& elevationType);
+    std::vector<std::string> GetElevationTypes() const;
+    std::string GetElevationDescription(const std::string& elevationType) const;
+    
+    // Boundary management
+#ifdef HAS_BRX_SDK
+    AcDbObjectId CreateBoundaryBox(const std::vector<AcGePoint3d>& points, 
+                                  const std::string& boundaryType, int colorIndex);
+#endif
+    void SetBoundaryFilter(const std::string& boundaryName, const std::vector<int>& colorIndices);
+    std::vector<int> GetBoundaryFilter(const std::string& boundaryName) const;
+    
+    // Layer management
+    bool ApplyLayerState(const std::string& stateName);
+    std::vector<std::string> GetLayerStates() const;
     
     // Query methods
-    std::vector<std::string> GetLoadedPlans() const;
-    Attachment* GetAttachment(const std::string& planName);
-    bool IsAttachmentVisible(const std::string& planName) const;
+    std::vector<PlanConfiguration> GetPlanConfigurations() const;
+    PlanConfiguration* GetPlanConfiguration(const std::string& planName);
+    bool IsPlanLoaded(const std::string& planName) const;
     
-    // Color management for versions
-    std::vector<int> GetActiveColors(const std::string& planName) const;
-    void ToggleColorInVersion(const std::string& planName, 
-                             const std::string& versionCode, 
-                             int colorIndex, 
-                             bool active);
+    // Template management
+    bool LoadTemplate(const std::string& templatePath);
+    bool SaveTemplate(const std::string& templatePath) const;
     
-    // BricsCAD integration
-#ifndef BUILDING_TESTS
-#if HAS_BRX_SDK
-    bool RefreshFromDrawing();
-    void OnXrefAttached(const AcDbObjectId& xrefId);
-    void OnXrefDetached(const AcDbObjectId& xrefId);
-#endif
-#endif
-    
-    // Serialization
-    bool SaveConfiguration(const std::string& filePath) const;
-    bool LoadConfiguration(const std::string& filePath);
+    // Event handling
+    void RegisterChangeCallback(ChangeCallback callback);
     
 private:
-    std::map<std::string, Attachment> m_attachments;
-    std::map<std::string, std::map<std::string, double>> m_areaFactors;
+    // Core data
+    std::map<std::string, PlanConfiguration> m_planConfigurations;
+    std::map<std::string, LayerStateManager> m_layerStates;
+    std::map<std::string, std::vector<int>> m_boundaryFilters;
+    std::map<std::string, std::string> m_elevationTypes;
+    std::vector<ChangeCallback> m_callbacks;
+    std::string m_templatePath;
     
-    void InitializeAreaFactors();
-    bool ValidatePlanName(const std::string& planName) const;
+    // Layer and document setup
+#ifdef HAS_BRX_SDK
+    bool CreateStandardLayers(AcDbDatabase* pDb, AcDbTransaction* pTr);
+    bool CreateMaterialBoundaryLayers(AcDbDatabase* pDb, AcDbTransaction* pTr);
+    bool CreateLayerIfNotExists(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr,
+                               const std::string& name, int colorIndex);
+    bool SetupLayerStates(AcDbDatabase* pDb, AcDbTransaction* pTr);
+    bool SetupDefaultViews(AcDbDatabase* pDb, AcDbTransaction* pTr);
+#endif
+    
+    // Elevation management
+    void InitializeElevationTypes();
+    void ApplyElevationLayers(const std::string& elevationType);
+#ifdef HAS_BRX_SDK
+    bool SetLayerVisibility(AcDbLayerTable* pLayerTable, AcDbTransaction* pTr,
+                           const std::string& layerName, bool visible);
+#endif
+    
+    // Boundary support
+#ifdef HAS_BRX_SDK
+    void AddBoundaryXData(AcDbEntity* pEntity, const std::string& boundaryType, 
+                         AcDbTransaction* pTr);
+#endif
+    
+    // Configuration management
+    bool LoadTemplateConfiguration(const std::string& configPath);
+    bool SaveTemplateConfiguration(const std::string& configPath) const;
+    
+    // Utilities
+    void NotifyChange(const std::string& message);
 };
 
 } // namespace EnhancedTakeoff
