@@ -45,6 +45,9 @@ CEnhancedTakeoffBricsCADMainDialog::CEnhancedTakeoffBricsCADMainDialog(CWnd* pPa
     : CDialogEx(IDD_ENHANCED_TAKEOFF_MAIN, pParent)
     , m_autoRefreshEnabled(false)
     , m_refreshTimerID(0)
+    , m_currentArea("")
+    , m_currentPlan("")
+    , m_currentElevation("")
 {
     // Initialize flexible managers - NO FIXED SYSTEMS
     m_pColorAssignment = std::make_unique<FlexibleColorAssignment>();
@@ -72,7 +75,7 @@ BOOL CEnhancedTakeoffBricsCADMainDialog::OnInitDialog()
         [this](int colorIndex) { OnColorAssignmentChanged(colorIndex); }
     );
     
-    // Initialize UI
+    // Initialize UI in logical order: Project Setup -> Color Assignment -> Live Monitoring
     InitializeDropdowns();
     InitializeColorList();
     InitializeQuantityList();
@@ -120,20 +123,54 @@ void CEnhancedTakeoffBricsCADMainDialog::InitializeElevationVariations()
     };
 }
 
-// Main event handlers
+// FIXED: Main color picker event handler connects to FlexibleColorAssignment
 void CEnhancedTakeoffBricsCADMainDialog::OnPickColor()
 {
+#ifdef HAS_BRX_SDK
     // Use BricsCAD color picker - NO FIXED ASSIGNMENTS
+    Adesk::UInt16 colorIndex;
+    if (acedGetColor(&colorIndex, Adesk::kFalse, 1) == RTNORM) {
+        FlexibleColorAssignment::ColorAssignment assignment;
+        assignment.colorIndex = colorIndex;
+        
+        // Get user-defined material details from UI controls
+        CString materialName;
+        m_materialTypeCombo.GetWindowText(materialName);
+        assignment.materialName = CT2A(materialName);
+        
+        CString unitCostText;
+        m_unitCostEdit.GetWindowText(unitCostText);
+        assignment.unitCost = _tstof(unitCostText);
+        
+        CString excelCellText;
+        m_excelCellEdit.GetWindowText(excelCellText);
+        assignment.excelCell = CT2A(excelCellText);
+        
+        // Apply assignment to flexible system
+        if (m_pColorAssignment->AssignColor(colorIndex, assignment)) {
+            UpdateColorList();
+            RefreshQuantities();
+            
+            CString message;
+            message.Format(_T("Color %d assigned successfully to %s!"), 
+                          colorIndex, materialName);
+            AfxMessageBox(message);
+        }
+    }
+#else
+    // Fallback for non-BricsCAD environments
     FlexibleColorAssignment::ColorAssignment assignment;
+    assignment.colorIndex = 1; // Default color
+    assignment.materialName = "User Defined Material";
+    assignment.unitCost = 1.50;
+    assignment.excelCell = "B15";
     
-    if (m_pColorAssignment->ShowColorPicker(assignment)) {
-        // User picked a color and defined material - completely flexible
-        m_pColorAssignment->AssignColor(assignment.colorIndex, assignment);
+    if (m_pColorAssignment->AssignColor(assignment.colorIndex, assignment)) {
         UpdateColorList();
         RefreshQuantities();
-        
         AfxMessageBox(_T("Color assignment created successfully!"));
     }
+#endif
 }
 
 void CEnhancedTakeoffBricsCADMainDialog::OnMatchColor()
